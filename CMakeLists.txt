@@ -14,8 +14,23 @@ set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
 project(${TARGET_NAME})
 include_directories(src/include)
 
-#find_package(libpcap REQUIRED)
-#target_link_libraries(pcap_duckdb_extension PRIVATE libpcap::libpcap)
+# 1. Find the header
+find_path(PCAP_INCLUDE_DIR pcap.h)
+
+# 2. Find the library file
+find_library(PCAP_LIBRARY pcap)
+
+if(PCAP_INCLUDE_DIR AND PCAP_LIBRARY)
+    message(STATUS "Found libpcap: ${PCAP_LIBRARY}")
+    
+    # 3. Add the include path
+    target_include_directories(pcap_duckdb_extension PRIVATE ${PCAP_INCLUDE_DIR})
+    
+    # 4. Link the library
+    target_link_libraries(pcap_duckdb_extension PRIVATE ${PCAP_LIBRARY})
+else()
+    message(FATAL_ERROR "Could not find libpcap. Try: brew install libpcap")
+endif()
 
 set(EXTENSION_SOURCES src/pcap_duckdb_extension.cpp)
 
