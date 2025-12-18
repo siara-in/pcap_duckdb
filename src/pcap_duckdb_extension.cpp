@@ -176,7 +176,7 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
 
             PcapFilter pf;
             pf.column_index = col_idx;
-            //printf("col_idx: %d, filter_type: %d\n", col_idx, filter->filter_type);
+            printf("col_idx: %d, filter_type: %d,", col_idx, filter->filter_type);
 
             TableFilter* current_filter = filter.get();
             while (current_filter->filter_type == TableFilterType::OPTIONAL_FILTER) {
@@ -237,6 +237,7 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
                 ++it;
                 continue;
             }
+            printf("applied\n");
             it = filters_map.erase(it);
         }
     }
