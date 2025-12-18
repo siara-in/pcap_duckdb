@@ -92,7 +92,7 @@ static bool ApplyFilters(const PcapPacketsBindData &bind,
     for (auto &f : bind.pushed_filters) {
         Value v;
 
-        switch (f.column_index) {
+        switch (bind.column_ids[f.column_index]) {
         case COL_TS: v = Value::TIMESTAMP(pkt.ts); break;
         case COL_SRC_IP: v = Value(pkt.src_ip); break;
         case COL_DST_IP: v = Value(pkt.dst_ip); break;
