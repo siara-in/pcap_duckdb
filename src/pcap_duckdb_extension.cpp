@@ -105,7 +105,7 @@ static bool ApplyFilters(const PcapPacketsBindData &bind,
         case COL_LENGTH: v = Value::INTEGER(pkt.length); break;
         default: continue;
         }
-printf("p: %s, f: %s\n", v.ToString().c_str(), f.value.ToString().c_str());
+        //printf("p: %s, f: %s\n", v.ToString().c_str(), f.value.ToString().c_str());
         bool match = true;
         switch (f.type) {
         case ExpressionType::COMPARE_EQUAL: match = (v == f.value); break;
@@ -165,20 +165,76 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
     auto state = make_uniq<PcapPacketsGlobalState>();
     auto &bind = (PcapPacketsBindData &)*input.bind_data;
 
-    /* collect pushed filters */
     if (input.filters) {
-        for (auto it = input.filters->filters.begin();
-             it != input.filters->filters.end();) {
-
+        auto &filters_map = input.filters->filters;
+        for (auto it = filters_map.begin(); it != filters_map.end(); ) {
+            idx_t col_idx = it->first;
             auto &filter = it->second;
-            if (filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
-                auto &cf = (ConstantFilter &)*filter;
-                bind.pushed_filters.push_back(
-                    {it->first, cf.comparison_type, cf.constant});
-                it = input.filters->filters.erase(it);
-            } else {
-                ++it;
+
+            PcapFilter pf;
+            pf.column_index = col_idx;
+            //printf("col_idx: %d, filter_type: %d\n", col_idx, filter->filter_type);
+
+            TableFilter* current_filter = filter.get();
+            while (current_filter->filter_type == TableFilterType::OPTIONAL_FILTER) {
+                current_filter = static_cast<OptionalFilter &>(*current_filter).child_filter.get();
             }
+
+            // 2. PROCESS: Handle the core filter type
+            if (current_filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
+                auto &constant_filter = static_cast<ConstantFilter &>(*current_filter);
+                pf.type = constant_filter.comparison_type;
+                pf.value = constant_filter.constant;
+                bind.pushed_filters.push_back(std::move(mf));
+            } 
+            else if (current_filter->filter_type == TableFilterType::CONJUNCTION_AND) {
+                auto &and_filter = static_cast<ConjunctionAndFilter &>(*current_filter);
+                for (auto &child : and_filter.child_filters) {
+                    // Check if children of AND are constants
+                    if (child->filter_type == TableFilterType::CONSTANT_COMPARISON) {
+                        PcapFilter pf_and;
+                        pf_and.column_index = col_idx;
+                        auto &constant_child = static_cast<ConstantFilter &>(*child);
+                        pf_and.type = constant_child.comparison_type;
+                        pf_and.value = constant_child.constant;
+                        bind.pushed_filters.push_back(std::move(mf_and));
+                    }
+                    // Note: If AND contains nested OPTIONALs or ORs, 
+                    // you might need a recursive call here.
+                }
+            }
+            else if (current_filter->filter_type == TableFilterType::CONJUNCTION_OR) {
+                auto &or_filter = static_cast<ConjunctionOrFilter &>(*current_filter);
+                pf.type = ExpressionType::COMPARE_IN;
+                vector<Value> in_values;
+                for (auto &child : or_filter.child_filters) {
+                    if (child->filter_type == TableFilterType::CONSTANT_COMPARISON) {
+                        in_values.push_back(static_cast<ConstantFilter &>(*child).constant);
+                    }
+                }
+                pf.value = Value::LIST(LogicalType::ANY, in_values);
+                bind.pushed_filters.push_back(std::move(mf));
+            }
+            else if (current_filter->filter_type == TableFilterType::IN_FILTER) {
+                auto &in_filter = static_cast<InFilter &>(*current_filter);
+                pf.type = ExpressionType::COMPARE_IN;
+                pf.value = Value::LIST(LogicalType::ANY, in_filter.values);
+                bind.pushed_filters.push_back(std::move(mf));
+            }
+            else if (current_filter->filter_type == TableFilterType::IS_NULL) {
+                pf.type = ExpressionType::OPERATOR_IS_NULL;
+                bind.pushed_filters.push_back(std::move(mf));
+            }
+            else if (current_filter->filter_type == TableFilterType::IS_NOT_NULL) {
+                pf.type = ExpressionType::OPERATOR_IS_NOT_NULL;
+                bind.pushed_filters.push_back(std::move(mf));
+            }
+            else {
+                // Not a filter type we handle yet
+                ++it;
+                continue;
+            }
+            it = filters_map.erase(it);
         }
     }
 
