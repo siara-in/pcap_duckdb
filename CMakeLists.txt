@@ -14,8 +14,8 @@ set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
 project(${TARGET_NAME})
 include_directories(src/include)
 
-find_package(Pcap CONFIG REQUIRED)
-target_link_libraries(pcap_duckdb PRIVATE Pcap::pcap)
+find_package(libpcap REQUIRED)
+target_link_libraries(pcap_duckdb_extension PRIVATE libpcap::libpcap)
 
 set(EXTENSION_SOURCES src/pcap_duckdb_extension.cpp)
 

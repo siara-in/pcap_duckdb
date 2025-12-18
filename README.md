@@ -1,3 +1,3 @@
-# DuckDB Madras Sorcery Community Extension 
+# DuckDB Pcap Community Extension 
 
-This extension adds support for Madras Sorcery Static trie backed databases
+This extension adds support for reading Pcap files
