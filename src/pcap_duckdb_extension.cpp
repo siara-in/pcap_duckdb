@@ -105,7 +105,7 @@ static bool ApplyFilters(const PcapPacketsBindData &bind,
         case COL_LENGTH: v = Value::INTEGER(pkt.length); break;
         default: continue;
         }
-print("p: %s, f: %s\n", v.ToString().c_str(), f.ToString().c_str());
+print("p: %s, f: %s\n", v.ToString().c_str(), f.value.ToString().c_str());
         bool match = true;
         switch (f.type) {
         case ExpressionType::COMPARE_EQUAL: match = (v == f.value); break;
