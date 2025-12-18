@@ -8,7 +8,12 @@
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <net/ethernet.h>
 #include <arpa/inet.h>
+
+#ifndef ETHERTYPE_IPV6
+#define ETHERTYPE_IPV6 0x86DD
+#endif
 
 using namespace duckdb;
 
@@ -224,11 +229,14 @@ PcapPacketsScan(ClientContext &, TableFunctionInput &input,
         pkt.ts = Timestamp::FromEpochSeconds(hdr->ts.tv_sec);
         pkt.length = hdr->len;
 
+        // Ensure we don't overflow if the packet is tiny
+        if (hdr->len < 14) continue;
+
         uint16_t ethertype = ntohs(*(uint16_t *)(data + 12));
         const u_char *l3 = data + 14;
 
         if (ethertype == ETHERTYPE_IPV6) {
-            auto ip6 = (ip6_hdr *)l3;
+            auto ip6 = (struct ip6_hdr *)l3; // Use 'struct' keyword to avoid ambiguity
             pkt.is_ipv6 = true;
             pkt.protocol = ip6->ip6_nxt;
 
@@ -238,16 +246,19 @@ PcapPacketsScan(ClientContext &, TableFunctionInput &input,
             inet_ntop(AF_INET6, &ip6->ip6_dst, buf, sizeof(buf));
             pkt.dst_ip = buf;
 
-            l3 += sizeof(ip6_hdr);
-        } else {
-            auto ip = (ip *)l3;
+            l3 += sizeof(struct ip6_hdr);
+        } else if (ethertype == 0x0800) { // 0x0800 is ETHERTYPE_IP
+            // Renamed 'ip' to 'iph' to avoid collision with 'struct ip'
+            auto iph = (struct ip *)l3; 
             pkt.is_ipv6 = false;
-            pkt.protocol = ip->ip_p;
+            pkt.protocol = iph->ip_p;
 
-            pkt.src_ip = inet_ntoa(ip->ip_src);
-            pkt.dst_ip = inet_ntoa(ip->ip_dst);
+            pkt.src_ip = inet_ntoa(iph->ip_src);
+            pkt.dst_ip = inet_ntoa(iph->ip_dst);
 
-            l3 += ip->ip_hl * 4;
+            l3 += iph->ip_hl * 4;
+        } else {
+            continue; // Skip non-IP traffic
         }
 
         if (pkt.protocol == IPPROTO_TCP) {
