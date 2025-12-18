@@ -14,6 +14,11 @@ set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
 project(${TARGET_NAME})
 include_directories(src/include)
 
+set(EXTENSION_SOURCES src/pcap_duckdb_extension.cpp)
+
+build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
+build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
+
 # 1. Find the header
 find_path(PCAP_INCLUDE_DIR pcap.h)
 
@@ -24,18 +29,13 @@ if(PCAP_INCLUDE_DIR AND PCAP_LIBRARY)
     message(STATUS "Found libpcap: ${PCAP_LIBRARY}")
     
     # 3. Add the include path
-    target_include_directories(${TARGET_NAME} PRIVATE ${PCAP_INCLUDE_DIR})
+    target_include_directories(${TARGET_NAME}_extension PRIVATE ${PCAP_INCLUDE_DIR})
     
     # 4. Link the library
-    target_link_libraries(${TARGET_NAME} PRIVATE ${PCAP_LIBRARY})
+    target_link_libraries(${TARGET_NAME}_extension PRIVATE ${PCAP_LIBRARY})
 else()
     message(FATAL_ERROR "Could not find libpcap. Try: brew install libpcap")
 endif()
-
-set(EXTENSION_SOURCES src/pcap_duckdb_extension.cpp)
-
-build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
-build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
 # Link Android log library only when building for Android
 # if(ANDROID)
