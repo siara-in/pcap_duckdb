@@ -29,8 +29,8 @@ if(PCAP_INCLUDE_DIR AND PCAP_LIBRARY)
     message(STATUS "Found libpcap: ${PCAP_LIBRARY}")
     
     # Use the Keyword signature (PRIVATE) to match the DuckDB template
-    target_include_directories(${TARGET_NAME}_extension PRIVATE ${PCAP_INCLUDE_DIR})
-    target_link_libraries(${TARGET_NAME}_extension PRIVATE ${PCAP_LIBRARY})
+    target_include_directories(${TARGET_NAME}_extension ${PCAP_INCLUDE_DIR})
+    target_link_libraries(${TARGET_NAME}_extension ${PCAP_LIBRARY})
     
 else()
     message(FATAL_ERROR "Could not find libpcap. Try: brew install libpcap")
