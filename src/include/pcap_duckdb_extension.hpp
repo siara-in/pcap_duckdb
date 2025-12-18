@@ -65,7 +65,7 @@ struct PcapPacketsBindData : public FunctionData {
 /* ---------------------------------------------------------
    Extension
 --------------------------------------------------------- */
-class PcapDuckdb : public Extension {
+class PcapDuckdbExtension : public Extension {
 public:
     void Load(DuckDB &db) override;
     string Name() override { return "pcap_duckdb"; }

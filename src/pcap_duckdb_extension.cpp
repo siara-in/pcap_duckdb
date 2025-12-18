@@ -292,7 +292,7 @@ PcapPacketsScan(ClientContext &, TableFunctionInput &input,
 /* ---------------------------------------------------------
    Load
 --------------------------------------------------------- */
-void PcapDuckdb::Load(DuckDB &db) {
+void PcapDuckdbExtension::Load(DuckDB &db) {
     TableFunction tf(
         "read_pcap_packets",
         {LogicalType::VARCHAR},
@@ -312,7 +312,7 @@ void PcapDuckdb::Load(DuckDB &db) {
 extern "C" {
 
 DUCKDB_EXTENSION_API void pcap_duckdb_init(duckdb::DuckDB *db) {
-    static PcapDuckdb ext;
+    static PcapDuckdbExtension ext;
     ext.Load(*db);
 }
 
