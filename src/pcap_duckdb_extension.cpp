@@ -1,7 +1,10 @@
 #include "pcap_duckdb_extension.hpp"
 
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 
 #include <netinet/ip.h>
@@ -185,7 +188,7 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
                 auto &constant_filter = static_cast<ConstantFilter &>(*current_filter);
                 pf.type = constant_filter.comparison_type;
                 pf.value = constant_filter.constant;
-                bind.pushed_filters.push_back(std::move(mf));
+                bind.pushed_filters.push_back(std::move(pf));
             } 
             else if (current_filter->filter_type == TableFilterType::CONJUNCTION_AND) {
                 auto &and_filter = static_cast<ConjunctionAndFilter &>(*current_filter);
@@ -197,7 +200,7 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
                         auto &constant_child = static_cast<ConstantFilter &>(*child);
                         pf_and.type = constant_child.comparison_type;
                         pf_and.value = constant_child.constant;
-                        bind.pushed_filters.push_back(std::move(mf_and));
+                        bind.pushed_filters.push_back(std::move(pf_and));
                     }
                     // Note: If AND contains nested OPTIONALs or ORs, 
                     // you might need a recursive call here.
@@ -213,21 +216,21 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
                     }
                 }
                 pf.value = Value::LIST(LogicalType::ANY, in_values);
-                bind.pushed_filters.push_back(std::move(mf));
+                bind.pushed_filters.push_back(std::move(pf));
             }
             else if (current_filter->filter_type == TableFilterType::IN_FILTER) {
                 auto &in_filter = static_cast<InFilter &>(*current_filter);
                 pf.type = ExpressionType::COMPARE_IN;
                 pf.value = Value::LIST(LogicalType::ANY, in_filter.values);
-                bind.pushed_filters.push_back(std::move(mf));
+                bind.pushed_filters.push_back(std::move(pf));
             }
             else if (current_filter->filter_type == TableFilterType::IS_NULL) {
                 pf.type = ExpressionType::OPERATOR_IS_NULL;
-                bind.pushed_filters.push_back(std::move(mf));
+                bind.pushed_filters.push_back(std::move(pf));
             }
             else if (current_filter->filter_type == TableFilterType::IS_NOT_NULL) {
                 pf.type = ExpressionType::OPERATOR_IS_NOT_NULL;
-                bind.pushed_filters.push_back(std::move(mf));
+                bind.pushed_filters.push_back(std::move(pf));
             }
             else {
                 // Not a filter type we handle yet
