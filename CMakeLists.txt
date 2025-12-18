@@ -28,11 +28,10 @@ find_library(PCAP_LIBRARY pcap)
 if(PCAP_INCLUDE_DIR AND PCAP_LIBRARY)
     message(STATUS "Found libpcap: ${PCAP_LIBRARY}")
     
-    # 3. Add the include path
+    # Use the Keyword signature (PRIVATE) to match the DuckDB template
     target_include_directories(${TARGET_NAME}_extension PRIVATE ${PCAP_INCLUDE_DIR})
-    
-    # 4. Link the library
     target_link_libraries(${TARGET_NAME}_extension PRIVATE ${PCAP_LIBRARY})
+    
 else()
     message(FATAL_ERROR "Could not find libpcap. Try: brew install libpcap")
 endif()
