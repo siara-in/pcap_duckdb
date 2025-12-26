@@ -251,7 +251,7 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
     state->handle =
         pcap_open_offline(bind.filename.c_str(), state->errbuf);
     if (!state->handle) {
-        throw duckdb::IOException("pcap_open_offline failed: {}", errbuf);
+        throw duckdb::IOException("pcap_open_offline failed: {}", state->errbuf);
     }
 
     /* BPF pushdown */
