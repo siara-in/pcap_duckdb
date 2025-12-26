@@ -379,7 +379,7 @@ static void PcapPacketsScan(ClientContext &, TableFunctionInput &input, DataChun
                     pkt.protocol == IPPROTO_TCP ? "TCP" :
                     pkt.protocol == IPPROTO_UDP ? "UDP" : "OTHER");
                 break;
-            case COL_LENGTH: output.SetValue(c, out, pkt.length); break;
+            case COL_LENGTH: output.SetValue(c, out, Value::INTEGER(pkt.length)); break;
             case COL_TCP_FLAGS: output.SetValue(c, out, pkt.tcp_flags); break;
             case COL_TCP_SEQ: output.SetValue(c, out, (int64_t)pkt.tcp_seq); break;
             case COL_TCP_ACK: output.SetValue(c, out, (int64_t)pkt.tcp_ack); break;
