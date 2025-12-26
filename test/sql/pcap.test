@@ -8,26 +8,32 @@ SELECT * FROM read_pcap_packets('sample/test.pcap');
 ----
 Catalog Error: Table Function with name read_pcap_packets does not exist!
 
-# Require statement ensures this test is run with the extension loaded
+# Ensure the extension is loaded
 require pcap_duckdb
 
-# Basic smoke test: reading the PCAP should return rows
+# ------------------------------------------------------------
+# Basic smoke test
+# ------------------------------------------------------------
 query I
 SELECT COUNT(*) > 0
 FROM read_pcap_packets('sample/test.pcap');
 ----
 true
 
-# Verify expected columns exist
+# ------------------------------------------------------------
+# Verify expected number of columns (UPDATED)
+# ------------------------------------------------------------
 query I
-SELECT COUNT(*) = 7
+SELECT COUNT(*) = 12
 FROM (
     DESCRIBE SELECT * FROM read_pcap_packets('sample/test.pcap')
 );
 ----
 true
 
+# ------------------------------------------------------------
 # Verify protocol values look reasonable
+# ------------------------------------------------------------
 query I
 SELECT COUNT(*) > 0
 FROM read_pcap_packets('sample/test.pcap')
@@ -35,7 +41,9 @@ WHERE protocol IN ('TCP', 'UDP');
 ----
 true
 
+# ------------------------------------------------------------
 # Verify packet lengths are positive
+# ------------------------------------------------------------
 query I
 SELECT COUNT(*) = 0
 FROM read_pcap_packets('sample/test.pcap')
@@ -43,7 +51,9 @@ WHERE length <= 0;
 ----
 true
 
+# ------------------------------------------------------------
 # Verify source and destination IPs are non-null
+# ------------------------------------------------------------
 query I
 SELECT COUNT(*) = 0
 FROM read_pcap_packets('sample/test.pcap')
@@ -51,7 +61,9 @@ WHERE src_ip IS NULL OR dst_ip IS NULL;
 ----
 true
 
+# ------------------------------------------------------------
 # Verify ports are valid when protocol is TCP or UDP
+# ------------------------------------------------------------
 query I
 SELECT COUNT(*) = 0
 FROM read_pcap_packets('sample/test.pcap')
@@ -60,7 +72,9 @@ WHERE protocol IN ('TCP', 'UDP')
 ----
 true
 
+# ------------------------------------------------------------
 # Verify timestamps are present
+# ------------------------------------------------------------
 query I
 SELECT COUNT(*) > 0
 FROM read_pcap_packets('sample/test.pcap')
@@ -68,13 +82,80 @@ WHERE ts IS NOT NULL;
 ----
 true
 
+# ------------------------------------------------------------
+# NEW: Verify interface_id is always present
+# (currently defaults to 0, but future-proof)
+# ------------------------------------------------------------
+query I
+SELECT COUNT(*) = 0
+FROM read_pcap_packets('sample/test.pcap')
+WHERE interface_id IS NULL;
+----
+true
+
+# ------------------------------------------------------------
+# NEW: TCP-specific field sanity checks
+# ------------------------------------------------------------
+
+# TCP flags should be present for TCP packets
+query I
+SELECT COUNT(*) = 0
+FROM read_pcap_packets('sample/test.pcap')
+WHERE protocol = 'TCP'
+  AND tcp_flags IS NULL;
+----
+true
+
+# TCP packets must have a sequence number
+query I
+SELECT COUNT(*) = 0
+FROM read_pcap_packets('sample/test.pcap')
+WHERE protocol = 'TCP'
+  AND tcp_seq IS NULL;
+----
+true
+
+# TCP acknowledgment numbers should be non-negative
+query I
+SELECT COUNT(*) = 0
+FROM read_pcap_packets('sample/test.pcap')
+WHERE protocol = 'TCP'
+  AND tcp_ack < 0;
+----
+true
+
+# TCP window size should be non-negative
+query I
+SELECT COUNT(*) = 0
+FROM read_pcap_packets('sample/test.pcap')
+WHERE protocol = 'TCP'
+  AND tcp_window < 0;
+----
+true
+
+# ------------------------------------------------------------
+# Verify UDP packets do not incorrectly populate TCP fields
+# (they should be zero, not NULL)
+# ------------------------------------------------------------
+query I
+SELECT COUNT(*) = 0
+FROM read_pcap_packets('sample/test.pcap')
+WHERE protocol = 'UDP'
+  AND (tcp_flags != 0 OR tcp_seq != 0 OR tcp_ack != 0);
+----
+true
+
+# ------------------------------------------------------------
 # Invalid file path should error
+# ------------------------------------------------------------
 statement error
 SELECT * FROM read_pcap_packets('sample/does_not_exist.pcap');
 ----
 IO Error
 
+# ------------------------------------------------------------
 # Basic aggregation test
+# ------------------------------------------------------------
 query I
 SELECT SUM(length) > 0
 FROM read_pcap_packets('sample/test.pcap');
