@@ -18,7 +18,7 @@
 #define ETHERTYPE_IPV6 0x86DD
 #endif
 
-using namespace duckdb;
+namespace duckdb {
 
 /* ---------------------------------------------------------
    Column indexes (packets table)
@@ -363,7 +363,7 @@ PcapPacketsScan(ClientContext &, TableFunctionInput &input,
 /* ---------------------------------------------------------
    Load
 --------------------------------------------------------- */
-void PcapDuckdbExtension::Load(DuckDB &db) {
+static TableFunction CreatePcapFunction() {
     TableFunction tf(
         "read_pcap_packets",
         {LogicalType::VARCHAR},
@@ -374,21 +374,61 @@ void PcapDuckdbExtension::Load(DuckDB &db) {
     tf.filter_pushdown = true;
     tf.projection_pushdown = true;
 
-    ExtensionUtil::RegisterFunction(*db.instance, tf);
+    return tf;
 }
 
-/* ---------------------------------------------------------
-   Entry points
---------------------------------------------------------- */
+#if DUCKDB_HAS_EXTENSION_LOADER
+
+static void LoadInternal(ExtensionLoader &loader) {
+    auto read_func = CreatePcapFunction();
+    loader.RegisterFunction(read_func);
+}
+
+void PcapDuckdbExtension::Load(ExtensionLoader &loader) {
+    LoadInternal(loader);
+}
+
+#else  // DuckDB 1.3.x
+
+void PcapDuckdbExtension::LoadInternal(DuckDB &db) {
+    auto read_func = CreatePcapFunction();
+    ExtensionUtil::RegisterFunction(*db.instance, read_func);
+}
+
+#endif
+
+std::string PcapDuckdbExtension::Name() {
+    return "pcap_duckdb";
+}
+
+std::string PcapDuckdbExtension::Version() const {
+#ifdef EXT_VERSION_PCAP_DUCKDB
+	return EXT_VERSION_PCAP_DUCKDB;
+#else
+	return "";
+#endif
+}
+
+} // namespace duckdb
+
 extern "C" {
 
+#if DUCKDB_HAS_EXTENSION_LOADER
+
+DUCKDB_CPP_EXTENSION_ENTRY(pcap_duckdb, loader) {
+	duckdb::LoadInternal(loader);
+}
+
+#else
+
 DUCKDB_EXTENSION_API void pcap_duckdb_init(duckdb::DuckDB *db) {
-    static PcapDuckdbExtension ext;
+    static duckdb::PcapDuckdbExtension ext;
     ext.Load(*db);
 }
 
-DUCKDB_EXTENSION_API const char *pcap_duckdb_version() {
-    return "0.1.0";
-}
+#endif
 
+DUCKDB_EXTENSION_API const char *pcap_duckdb_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
 }

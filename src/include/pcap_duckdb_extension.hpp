@@ -8,6 +8,13 @@
 #include <string>
 #include <vector>
 
+#if defined(DUCKDB_CPP_EXTENSION_ENTRY)
+    #include "duckdb/main/extension/extension_loader.hpp"
+    #define DUCKDB_HAS_EXTENSION_LOADER 1
+#else
+    #define DUCKDB_HAS_EXTENSION_LOADER 0
+#endif
+
 namespace duckdb {
 
 /* ---------------------------------------------------------
@@ -67,6 +74,18 @@ struct PcapPacketsBindData : public FunctionData {
 --------------------------------------------------------- */
 class PcapDuckdbExtension : public Extension {
 public:
+#if DUCKDB_HAS_EXTENSION_LOADER
+
+    void Load(ExtensionLoader &loader) override;
+
+#else
+
+    void LoadInternal(DuckDB &db);
+    void Load(DuckDB &db) override {
+        LoadInternal(db);
+    }
+
+#endif
     void Load(DuckDB &db) override;
     string Name() override { return "pcap_duckdb"; }
 };
