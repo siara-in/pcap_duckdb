@@ -31,8 +31,8 @@ if(VCPKG_TOOLCHAIN)
     )
 endif()
 
-target_link_libraries(${EXTENSION_NAME} PRIVATE pcap_vcpkg)
-target_link_libraries(${LOADABLE_EXTENSION_NAME} PRIVATE pcap_vcpkg)
+target_link_libraries(${EXTENSION_NAME} pcap_vcpkg)
+target_link_libraries(${LOADABLE_EXTENSION_NAME} pcap_vcpkg)
 # Link Android log library only when building for Android
 # if(ANDROID)
 #     target_link_libraries(${TARGET_NAME}_extension 
