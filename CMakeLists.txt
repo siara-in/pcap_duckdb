@@ -1,12 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
 
-if(DEFINED ENV{VCPKG_ROOT} AND NOT DEFINED CMAKE_TOOLCHAIN_FILE)
-    set(CMAKE_TOOLCHAIN_FILE
-        "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-        CACHE STRING ""
-    )
-endif()
-
 # Set extension name here
 set(TARGET_NAME pcap_duckdb)
 
@@ -26,46 +19,22 @@ set(EXTENSION_SOURCES src/pcap_duckdb_extension.cpp)
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
-# First try vcpkg / config-mode
-find_package(Pcap CONFIG QUIET)
-
-if(Pcap_FOUND)
-    message(STATUS "Using Pcap from find_package")
-
-    target_link_libraries(${TARGET_NAME}_extension
-        PRIVATE Pcap::Pcap
-    )
-    target_link_libraries(${TARGET_NAME}_loadable_extension
-        PRIVATE Pcap::Pcap
-    )
-
+if(WIN32)
+    find_package(Pcap CONFIG REQUIRED)
+    set(PCAP_LIBS Pcap::Pcap)
 else()
-    message(STATUS "Falling back to manual libpcap discovery")
-
-    find_path(PCAP_INCLUDE_DIR pcap/pcap.h)
-    find_library(PCAP_LIBRARY pcap)
-
-    if(NOT PCAP_INCLUDE_DIR OR NOT PCAP_LIBRARY)
-        message(FATAL_ERROR "Could not find libpcap")
-    endif()
-
-    find_package(Threads REQUIRED)
-
-    foreach(tgt
-        ${TARGET_NAME}_extension
-        ${TARGET_NAME}_loadable_extension
-    )
-        target_include_directories(${tgt} PRIVATE ${PCAP_INCLUDE_DIR})
-        target_link_libraries(${tgt}
-            PRIVATE
-                ${PCAP_LIBRARY}
-                Threads::Threads
-        )
-        if(UNIX AND NOT APPLE)
-            target_link_libraries(${tgt} PRIVATE dl rt)
-        endif()
-    endforeach()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(PCAP REQUIRED libpcap)
+    set(PCAP_LIBS ${PCAP_LIBRARIES})
 endif()
+
+foreach(tgt
+    ${TARGET_NAME}_extension
+    ${TARGET_NAME}_loadable_extension
+)
+    target_include_directories(${tgt} PRIVATE ${PCAP_INCLUDE_DIRS})
+    target_link_libraries(${tgt} PRIVATE ${PCAP_LIBS})
+endforeach()
 
 # Link Android log library only when building for Android
 # if(ANDROID)
