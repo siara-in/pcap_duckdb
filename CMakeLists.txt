@@ -30,11 +30,11 @@ if(PCAP_INCLUDE_DIR AND PCAP_LIBRARY)
 
     # Static extension
     target_include_directories(${TARGET_NAME}_extension PRIVATE ${PCAP_INCLUDE_DIR})
-    target_link_libraries(${TARGET_NAME}_extension PRIVATE ${PCAP_LIBRARY})
+    target_link_libraries(${TARGET_NAME}_extension ${PCAP_LIBRARY})
 
     # Loadable (dynamic) extension  ← THIS WAS MISSING
     target_include_directories(${TARGET_NAME}_loadable_extension PRIVATE ${PCAP_INCLUDE_DIR})
-    target_link_libraries(${TARGET_NAME}_loadable_extension PRIVATE ${PCAP_LIBRARY})
+    target_link_libraries(${TARGET_NAME}_loadable_extension ${PCAP_LIBRARY})
 
 else()
     message(FATAL_ERROR "Could not find libpcap. Try: brew install libpcap")
