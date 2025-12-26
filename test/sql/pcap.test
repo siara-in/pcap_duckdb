@@ -1,0 +1,82 @@
+# name: test/sql/pcap.test
+# description: test pcap extension
+# group: [pcap]
+
+# Before we load the extension, this should fail
+statement error
+SELECT * FROM read_pcap_packets('sample/test.pcap');
+----
+Catalog Error: Table Function with name read_pcap_packets does not exist!
+
+# Require statement ensures this test is run with the extension loaded
+require pcap_duckdb
+
+# Basic smoke test: reading the PCAP should return rows
+query I
+SELECT COUNT(*) > 0
+FROM read_pcap_packets('sample/test.pcap');
+----
+true
+
+# Verify expected columns exist
+query I
+SELECT COUNT(*) = 7
+FROM (
+    DESCRIBE SELECT * FROM read_pcap_packets('sample/test.pcap')
+);
+----
+true
+
+# Verify protocol values look reasonable
+query I
+SELECT COUNT(*) > 0
+FROM read_pcap_packets('sample/test.pcap')
+WHERE protocol IN ('TCP', 'UDP');
+----
+true
+
+# Verify packet lengths are positive
+query I
+SELECT COUNT(*) = 0
+FROM read_pcap_packets('sample/test.pcap')
+WHERE length <= 0;
+----
+true
+
+# Verify source and destination IPs are non-null
+query I
+SELECT COUNT(*) = 0
+FROM read_pcap_packets('sample/test.pcap')
+WHERE src_ip IS NULL OR dst_ip IS NULL;
+----
+true
+
+# Verify ports are valid when protocol is TCP or UDP
+query I
+SELECT COUNT(*) = 0
+FROM read_pcap_packets('sample/test.pcap')
+WHERE protocol IN ('TCP', 'UDP')
+  AND (src_port < 0 OR dst_port < 0);
+----
+true
+
+# Verify timestamps are present
+query I
+SELECT COUNT(*) > 0
+FROM read_pcap_packets('sample/test.pcap')
+WHERE ts IS NOT NULL;
+----
+true
+
+# Invalid file path should error
+statement error
+SELECT * FROM read_pcap_packets('sample/does_not_exist.pcap');
+----
+IO Error
+
+# Basic aggregation test
+query I
+SELECT SUM(length) > 0
+FROM read_pcap_packets('sample/test.pcap');
+----
+true
