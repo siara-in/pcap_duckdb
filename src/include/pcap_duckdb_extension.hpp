@@ -86,8 +86,8 @@ public:
     }
 
 #endif
-    void Load(DuckDB &db) override;
     string Name() override { return "pcap_duckdb"; }
+    std::string Version() const override;
 };
 
 } // namespace duckdb

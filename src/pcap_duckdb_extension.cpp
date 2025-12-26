@@ -1,11 +1,14 @@
 #include "pcap_duckdb_extension.hpp"
 
-#include "duckdb/main/extension_util.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
+
+#if DUCKDB_HAS_EXTENSION_LOADER == 0
+#include "duckdb/main/extension_util.hpp"
+#endif
 
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
@@ -396,10 +399,6 @@ void PcapDuckdbExtension::LoadInternal(DuckDB &db) {
 }
 
 #endif
-
-std::string PcapDuckdbExtension::Name() {
-    return "pcap_duckdb";
-}
 
 std::string PcapDuckdbExtension::Version() const {
 #ifdef EXT_VERSION_PCAP_DUCKDB
