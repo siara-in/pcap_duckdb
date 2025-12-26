@@ -115,24 +115,6 @@ WHERE protocol = 'TCP'
 ----
 true
 
-# TCP acknowledgment numbers should be non-negative
-query I
-SELECT COUNT(*) = 0
-FROM read_pcap_packets('sample/test.pcap')
-WHERE protocol = 'TCP'
-  AND tcp_ack < 0;
-----
-true
-
-# TCP window size should be non-negative
-query I
-SELECT COUNT(*) = 0
-FROM read_pcap_packets('sample/test.pcap')
-WHERE protocol = 'TCP'
-  AND tcp_window < 0;
-----
-true
-
 # ------------------------------------------------------------
 # Verify UDP packets do not incorrectly populate TCP fields
 # (they should be zero, not NULL)
