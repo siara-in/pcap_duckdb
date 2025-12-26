@@ -19,25 +19,45 @@ set(EXTENSION_SOURCES src/pcap_duckdb_extension.cpp)
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
-# 1. Find the header
-find_path(PCAP_INCLUDE_DIR pcap.h)
+# First try vcpkg / config-mode
+find_package(Pcap CONFIG QUIET)
 
-# 2. Find the library file
-find_library(PCAP_LIBRARY pcap)
+if(Pcap_FOUND)
+    message(STATUS "Using Pcap from find_package")
 
-if(PCAP_INCLUDE_DIR AND PCAP_LIBRARY)
-    message(STATUS "Found libpcap: ${PCAP_LIBRARY}")
-
-    # Static extension
-    target_include_directories(${TARGET_NAME}_extension PRIVATE ${PCAP_INCLUDE_DIR})
-    target_link_libraries(${TARGET_NAME}_extension ${PCAP_LIBRARY})
-
-    # Loadable (dynamic) extension  ← THIS WAS MISSING
-    target_include_directories(${TARGET_NAME}_loadable_extension PRIVATE ${PCAP_INCLUDE_DIR})
-    target_link_libraries(${TARGET_NAME}_loadable_extension ${PCAP_LIBRARY})
+    target_link_libraries(${TARGET_NAME}_extension
+        PRIVATE Pcap::Pcap
+    )
+    target_link_libraries(${TARGET_NAME}_loadable_extension
+        PRIVATE Pcap::Pcap
+    )
 
 else()
-    message(FATAL_ERROR "Could not find libpcap. Try: brew install libpcap")
+    message(STATUS "Falling back to manual libpcap discovery")
+
+    find_path(PCAP_INCLUDE_DIR pcap/pcap.h)
+    find_library(PCAP_LIBRARY pcap)
+
+    if(NOT PCAP_INCLUDE_DIR OR NOT PCAP_LIBRARY)
+        message(FATAL_ERROR "Could not find libpcap")
+    endif()
+
+    find_package(Threads REQUIRED)
+
+    foreach(tgt
+        ${TARGET_NAME}_extension
+        ${TARGET_NAME}_loadable_extension
+    )
+        target_include_directories(${tgt} PRIVATE ${PCAP_INCLUDE_DIR})
+        target_link_libraries(${tgt}
+            PRIVATE
+                ${PCAP_LIBRARY}
+                Threads::Threads
+        )
+        if(UNIX AND NOT APPLE)
+            target_link_libraries(${tgt} PRIVATE dl rt)
+        endif()
+    endforeach()
 endif()
 
 # Link Android log library only when building for Android
