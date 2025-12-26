@@ -41,24 +41,6 @@ enum {
     COL_TCP_WINDOW
 };
 
-// ===================== ParsedPacket =====================
-struct ParsedPacket {
-    timestamp_t ts;
-    int interface_id = 0;
-    bool is_ipv6 = false;
-    uint8_t protocol = 0;
-    string src_ip;
-    string dst_ip;
-    uint16_t src_port = 0;
-    uint16_t dst_port = 0;
-    uint32_t length = 0;
-
-    uint8_t tcp_flags = 0;
-    uint32_t tcp_seq = 0;
-    uint32_t tcp_ack = 0;
-    uint16_t tcp_window = 0;
-};
-
 // ===================== VLAN SUPPORT =====================
 #define ETHERTYPE_VLAN 0x8100
 
