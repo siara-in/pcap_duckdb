@@ -28,13 +28,50 @@ namespace duckdb {
 --------------------------------------------------------- */
 enum {
     COL_TS = 0,
+    COL_IFACE,
     COL_SRC_IP,
     COL_DST_IP,
     COL_SRC_PORT,
     COL_DST_PORT,
     COL_PROTOCOL,
-    COL_LENGTH
+    COL_LENGTH,
+    COL_TCP_FLAGS,
+    COL_TCP_SEQ,
+    COL_TCP_ACK,
+    COL_TCP_WINDOW
 };
+
+// ===================== ParsedPacket =====================
+struct ParsedPacket {
+    timestamp_t ts;
+    int interface_id = 0;
+    bool is_ipv6 = false;
+    uint8_t protocol = 0;
+    string src_ip;
+    string dst_ip;
+    uint16_t src_port = 0;
+    uint16_t dst_port = 0;
+    uint32_t length = 0;
+
+    uint8_t tcp_flags = 0;
+    uint32_t tcp_seq = 0;
+    uint32_t tcp_ack = 0;
+    uint16_t tcp_window = 0;
+};
+
+// ===================== VLAN SUPPORT =====================
+#define ETHERTYPE_VLAN 0x8100
+
+static uint16_t ParseEtherType(const u_char *&ptr) {
+    uint16_t ethertype = ntohs(*(uint16_t *)(ptr + 12));
+    ptr += 14;
+
+    if (ethertype == ETHERTYPE_VLAN) {
+        ethertype = ntohs(*(uint16_t *)(ptr + 2));
+        ptr += 4;
+    }
+    return ethertype;
+}
 
 /* ---------------------------------------------------------
    Global State
@@ -58,32 +95,31 @@ struct BpfBuilder {
     }
 };
 
+// ===================== BPF PUSH IN =====================
 static void TryBuildBpf(const vector<PcapFilter> &filters, BpfBuilder &bpf) {
     for (auto &f : filters) {
-        if (f.type != ExpressionType::COMPARE_EQUAL) {
+        if (f.type == ExpressionType::COMPARE_IN) {
+            auto list = ListValue::GetChildren(f.value);
+            vector<string> ors;
+            for (auto &v : list) {
+                ors.push_back("src port " + v.ToString());
+            }
+            bpf.Add("(" + StringUtil::Join(ors, " or ") + ")");
             continue;
         }
 
+        if (f.type != ExpressionType::COMPARE_EQUAL) continue;
+
         switch (f.column_index) {
-        case COL_PROTOCOL: {
-            auto p = StringUtil::Lower(f.value.GetValue<string>());
-            if (p == "tcp") bpf.Add("(tcp or tcp6)");
-            else if (p == "udp") bpf.Add("(udp or udp6)");
+        case COL_PROTOCOL:
+            if (StringUtil::Lower(f.value.GetValue<string>()) == "tcp")
+                bpf.Add("(tcp or tcp6)");
             break;
-        }
         case COL_SRC_PORT:
             bpf.Add("src port " + f.value.ToString());
             break;
         case COL_DST_PORT:
             bpf.Add("dst port " + f.value.ToString());
-            break;
-        case COL_SRC_IP:
-            bpf.Add("src host " + f.value.GetValue<string>());
-            break;
-        case COL_DST_IP:
-            bpf.Add("dst host " + f.value.GetValue<string>());
-            break;
-        default:
             break;
         }
     }
@@ -111,7 +147,7 @@ static bool ApplyFilters(const PcapPacketsBindData &bind,
         case COL_LENGTH: v = Value::INTEGER(pkt.length); break;
         default: continue;
         }
-        //printf("p: %s, f: %s\n", v.ToString().c_str(), f.value.ToString().c_str());
+        // printf("p: %s, f: %s\n", v.ToString().c_str(), f.value.ToString().c_str());
         bool match = true;
         switch (f.type) {
         case ExpressionType::COMPARE_EQUAL: match = (v == f.value); break;
@@ -144,19 +180,33 @@ PcapPacketsBind(ClientContext &, TableFunctionBindInput &input,
     bind->filename = input.inputs[0].GetValue<string>();
 
     names = {
-        "ts", "src_ip", "dst_ip",
-        "src_port", "dst_port",
-        "protocol", "length"
+        "ts",
+        "interface_id",
+        "src_ip",
+        "dst_ip",
+        "src_port",
+        "dst_port",
+        "protocol",
+        "length",
+        "tcp_flags",
+        "tcp_seq",
+        "tcp_ack",
+        "tcp_window"
     };
 
     types = {
-        LogicalType::TIMESTAMP,
-        LogicalType::VARCHAR,
-        LogicalType::VARCHAR,
-        LogicalType::INTEGER,
-        LogicalType::INTEGER,
-        LogicalType::VARCHAR,
-        LogicalType::INTEGER
+        LogicalType::TIMESTAMP,   // ts
+        LogicalType::INTEGER,     // interface_id
+        LogicalType::VARCHAR,     // src_ip
+        LogicalType::VARCHAR,     // dst_ip
+        LogicalType::INTEGER,     // src_port
+        LogicalType::INTEGER,     // dst_port
+        LogicalType::VARCHAR,     // protocol
+        LogicalType::INTEGER,     // length
+        LogicalType::INTEGER,     // tcp_flags
+        LogicalType::BIGINT,      // tcp_seq
+        LogicalType::BIGINT,      // tcp_ack
+        LogicalType::INTEGER      // tcp_window
     };
 
     return std::move(bind);
@@ -179,7 +229,7 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
 
             PcapFilter pf;
             pf.column_index = col_idx;
-            printf("col_idx: %d, filter_type: %d,", col_idx, filter->filter_type);
+            // printf("col_idx: %d, filter_type: %d,", col_idx, filter->filter_type);
 
             TableFilter* current_filter = filter.get();
             while (current_filter->filter_type == TableFilterType::OPTIONAL_FILTER) {
@@ -240,7 +290,7 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
                 ++it;
                 continue;
             }
-            printf("applied\n");
+            // printf("applied\n");
             it = filters_map.erase(it);
         }
     }
@@ -271,12 +321,8 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
     return std::move(state);
 }
 
-/* ---------------------------------------------------------
-   Scan
---------------------------------------------------------- */
-static void
-PcapPacketsScan(ClientContext &, TableFunctionInput &input,
-                DataChunk &output) {
+// ===================== SCAN =====================
+static void PcapPacketsScan(ClientContext &, TableFunctionInput &input, DataChunk &output) {
 
     auto &state = (PcapPacketsGlobalState &)*input.global_state;
     auto &bind = (PcapPacketsBindData &)*input.bind_data;
@@ -292,15 +338,11 @@ PcapPacketsScan(ClientContext &, TableFunctionInput &input,
         pkt.ts = Timestamp::FromEpochSeconds(hdr->ts.tv_sec);
         pkt.length = hdr->len;
 
-        // Ensure we don't overflow if the packet is tiny
-        if (hdr->len < 14) continue;
-
-        uint16_t ethertype = ntohs(*(uint16_t *)(data + 12));
-        const u_char *l3 = data + 14;
+        const u_char *ptr = data;
+        uint16_t ethertype = ParseEtherType(ptr);
 
         if (ethertype == ETHERTYPE_IPV6) {
-            auto ip6 = (struct ip6_hdr *)l3; // Use 'struct' keyword to avoid ambiguity
-            pkt.is_ipv6 = true;
+            auto ip6 = (struct ip6_hdr *)ptr;
             pkt.protocol = ip6->ip6_nxt;
 
             char buf[INET6_ADDRSTRLEN];
@@ -309,52 +351,57 @@ PcapPacketsScan(ClientContext &, TableFunctionInput &input,
             inet_ntop(AF_INET6, &ip6->ip6_dst, buf, sizeof(buf));
             pkt.dst_ip = buf;
 
-            l3 += sizeof(struct ip6_hdr);
-        } else if (ethertype == 0x0800) { // 0x0800 is ETHERTYPE_IP
-            // Renamed 'ip' to 'iph' to avoid collision with 'struct ip'
-            auto iph = (struct ip *)l3; 
-            pkt.is_ipv6 = false;
-            pkt.protocol = iph->ip_p;
+            ptr += sizeof(ip6_hdr);
+        } 
+        else if (ethertype == ETHERTYPE_IP) {
+            auto ip = (struct ip *)ptr;
+            pkt.protocol = ip->ip_p;
 
-            pkt.src_ip = inet_ntoa(iph->ip_src);
-            pkt.dst_ip = inet_ntoa(iph->ip_dst);
+            char buf[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &ip->ip_src, buf, sizeof(buf));
+            pkt.src_ip = buf;
+            inet_ntop(AF_INET, &ip->ip_dst, buf, sizeof(buf));
+            pkt.dst_ip = buf;
 
-            l3 += iph->ip_hl * 4;
+            ptr += ip->ip_hl * 4;
         } else {
-            continue; // Skip non-IP traffic
+            continue;
         }
 
         if (pkt.protocol == IPPROTO_TCP) {
-            auto tcp = (tcphdr *)l3;
+            auto tcp = (tcphdr *)ptr;
             pkt.src_port = ntohs(tcp->th_sport);
             pkt.dst_port = ntohs(tcp->th_dport);
+            pkt.tcp_flags = tcp->th_flags;
+            pkt.tcp_seq = ntohl(tcp->th_seq);
+            pkt.tcp_ack = ntohl(tcp->th_ack);
+            pkt.tcp_window = ntohs(tcp->th_win);
         } else if (pkt.protocol == IPPROTO_UDP) {
-            auto udp = (udphdr *)l3;
+            auto udp = (udphdr *)ptr;
             pkt.src_port = ntohs(udp->uh_sport);
             pkt.dst_port = ntohs(udp->uh_dport);
-        } else {
-            pkt.src_port = pkt.dst_port = 0;
         }
 
-        if (!ApplyFilters(bind, pkt)) {
-            continue;
-        }
+        if (!ApplyFilters(bind, pkt)) continue;
 
         for (idx_t c = 0; c < bind.column_ids.size(); c++) {
             switch (bind.column_ids[c]) {
             case COL_TS: output.SetValue(c, out, Value::TIMESTAMP(pkt.ts)); break;
+            case COL_IFACE: output.SetValue(c, out, Value::INTEGER(pkt.interface_id)); break;
             case COL_SRC_IP: output.SetValue(c, out, pkt.src_ip); break;
             case COL_DST_IP: output.SetValue(c, out, pkt.dst_ip); break;
-            case COL_SRC_PORT: output.SetValue(c, out, Value::INTEGER(pkt.src_port)); break;
-            case COL_DST_PORT: output.SetValue(c, out, Value::INTEGER(pkt.dst_port)); break;
+            case COL_SRC_PORT: output.SetValue(c, out, pkt.src_port); break;
+            case COL_DST_PORT: output.SetValue(c, out, pkt.dst_port); break;
             case COL_PROTOCOL:
                 output.SetValue(c, out,
                     pkt.protocol == IPPROTO_TCP ? "TCP" :
                     pkt.protocol == IPPROTO_UDP ? "UDP" : "OTHER");
                 break;
-            case COL_LENGTH:
-                output.SetValue(c, out, Value::INTEGER(pkt.length));
-                break;
+            case COL_LENGTH: output.SetValue(c, out, pkt.length); break;
+            case COL_TCP_FLAGS: output.SetValue(c, out, pkt.tcp_flags); break;
+            case COL_TCP_SEQ: output.SetValue(c, out, (int64_t)pkt.tcp_seq); break;
+            case COL_TCP_ACK: output.SetValue(c, out, (int64_t)pkt.tcp_ack); break;
+            case COL_TCP_WINDOW: output.SetValue(c, out, pkt.tcp_window); break;
             }
         }
         out++;
