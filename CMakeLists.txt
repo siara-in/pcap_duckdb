@@ -14,22 +14,15 @@ set(EXTENSION_SOURCES src/pcap_duckdb_extension.cpp)
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
-add_library(pcap_vcpkg UNKNOWN IMPORTED)
+find_package(Pcap CONFIG QUIET)
 
-find_library(PCAP_LIBRARY
-    NAMES pcap
-    PATHS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib"
-    REQUIRED
-)
+if(NOT Pcap_FOUND)
+    find_package(PCAP REQUIRED)  # FindPCAP.cmake (system)
+endif()
 
-set_target_properties(pcap_vcpkg PROPERTIES
-    IMPORTED_LOCATION "${PCAP_LIBRARY}"
-    INTERFACE_INCLUDE_DIRECTORIES
-        "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include"
-)
+target_link_libraries(${EXTENSION_NAME} PRIVATE Pcap::Pcap)
+target_link_libraries(${LOADABLE_EXTENSION_NAME} PRIVATE Pcap::Pcap)
 
-target_link_libraries(${EXTENSION_NAME} pcap_vcpkg)
-target_link_libraries(${LOADABLE_EXTENSION_NAME} pcap_vcpkg)
 # Link Android log library only when building for Android
 # if(ANDROID)
 #     target_link_libraries(${TARGET_NAME}_extension 
