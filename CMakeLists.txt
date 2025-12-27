@@ -14,22 +14,19 @@ set(EXTENSION_SOURCES src/pcap_duckdb_extension.cpp)
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
-if(VCPKG_TOOLCHAIN)
-    set(PCAP_ROOT "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+add_library(pcap_vcpkg UNKNOWN IMPORTED)
 
-    find_library(PCAP_LIBRARY
-        NAMES pcap
-        PATHS "${PCAP_ROOT}/lib"
-        NO_DEFAULT_PATH
-        REQUIRED
-    )
+find_library(PCAP_LIBRARY
+    NAMES pcap
+    PATHS "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib"
+    REQUIRED
+)
 
-    add_library(pcap_vcpkg UNKNOWN IMPORTED)
-    set_target_properties(pcap_vcpkg PROPERTIES
-        IMPORTED_LOCATION "${PCAP_LIBRARY}"
-        INTERFACE_INCLUDE_DIRECTORIES "${PCAP_ROOT}/include"
-    )
-endif()
+set_target_properties(pcap_vcpkg PROPERTIES
+    IMPORTED_LOCATION "${PCAP_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES
+        "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include"
+)
 
 target_link_libraries(${EXTENSION_NAME} pcap_vcpkg)
 target_link_libraries(${LOADABLE_EXTENSION_NAME} pcap_vcpkg)
