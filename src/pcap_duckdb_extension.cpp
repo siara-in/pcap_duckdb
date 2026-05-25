@@ -428,7 +428,7 @@ DUCKDB_EXTENSION_API void pcap_duckdb_init(duckdb::DatabaseInstance &db) {
     duckdb::ExtensionLoader loader(db, ext.Name());
     ext.Load(loader);
 }
-DUCKDB_EXTENSION_API void pcap_duckdb_cpp_init(duckdb::DatabaseInstance &db) {
+DUCKDB_EXTENSION_API void pcap_duckdb_duckdb_cpp_init(duckdb::DatabaseInstance &db) {
     static duckdb::PcapDuckdbExtension ext;
     duckdb::ExtensionLoader loader(db, ext.Name());
     ext.Load(loader);
