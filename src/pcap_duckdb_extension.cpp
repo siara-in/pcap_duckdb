@@ -6,10 +6,6 @@
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 
-#if DUCKDB_HAS_EXTENSION_LOADER == 0
-#include "duckdb/main/extension_util.hpp"
-#endif
-
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
 #include <netinet/tcp.h>
@@ -20,6 +16,8 @@
 #ifndef ETHERTYPE_IPV6
 #define ETHERTYPE_IPV6 0x86DD
 #endif
+
+const char *pcap_duckdb_ver = "1.0.1";
 
 namespace duckdb {
 
@@ -409,8 +407,6 @@ static TableFunction CreatePcapFunction() {
     return tf;
 }
 
-#if DUCKDB_HAS_EXTENSION_LOADER
-
 static void LoadInternal(ExtensionLoader &loader) {
     auto read_func = CreatePcapFunction();
     loader.RegisterFunction(read_func);
@@ -420,43 +416,24 @@ void PcapDuckdbExtension::Load(ExtensionLoader &loader) {
     LoadInternal(loader);
 }
 
-#else  // DuckDB 1.3.x
-
-void PcapDuckdbExtension::LoadInternal(DuckDB &db) {
-    auto read_func = CreatePcapFunction();
-    ExtensionUtil::RegisterFunction(*db.instance, read_func);
-}
-
-#endif
-
 std::string PcapDuckdbExtension::Version() const {
-#ifdef EXT_VERSION_PCAP_DUCKDB
-	return EXT_VERSION_PCAP_DUCKDB;
-#else
-	return "";
-#endif
+	return pcap_duckdb_ver;
 }
 
 } // namespace duckdb
 
 extern "C" {
-
-#if DUCKDB_HAS_EXTENSION_LOADER
-
-DUCKDB_CPP_EXTENSION_ENTRY(pcap_duckdb, loader) {
-	duckdb::LoadInternal(loader);
-}
-
-#else
-
-DUCKDB_EXTENSION_API void pcap_duckdb_init(duckdb::DuckDB *db) {
+DUCKDB_EXTENSION_API void pcap_duckdb_init(duckdb::DatabaseInstance &db) {
     static duckdb::PcapDuckdbExtension ext;
-    ext.Load(*db);
+    duckdb::ExtensionLoader loader(db, ext.Name());
+    ext.Load(loader);
 }
-
-#endif
-
+DUCKDB_EXTENSION_API void pcap_duckdb_cpp_init(duckdb::DatabaseInstance &db) {
+    static duckdb::PcapDuckdbExtension ext;
+    duckdb::ExtensionLoader loader(db, ext.Name());
+    ext.Load(loader);
+}
 DUCKDB_EXTENSION_API const char *pcap_duckdb_version() {
-	return duckdb::DuckDB::LibraryVersion();
+    return pcap_duckdb_ver;
 }
 }
