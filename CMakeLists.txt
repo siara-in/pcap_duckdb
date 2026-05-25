@@ -14,7 +14,7 @@ set(EXTENSION_SOURCES src/pcap_duckdb_extension.cpp)
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
-find_package(PCAP REQUIRED)
+find_package(pcap REQUIRED)
 
 target_link_libraries(${EXTENSION_NAME} PRIVATE PCAP::PCAP)
 target_link_libraries(${LOADABLE_EXTENSION_NAME} PRIVATE PCAP::PCAP)
