@@ -14,14 +14,14 @@ set(EXTENSION_SOURCES src/pcap_duckdb_extension.cpp)
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
-find_path(PCAP_INCLUDE_DIR pcap.h)
-find_library(PCAP_LIBRARY pcap)
+find_path(PCAP_INCLUDE_DIR pcap.h REQUIRED)
+find_library(PCAP_LIBRARY pcap REQUIRED)
 
 target_include_directories(${EXTENSION_NAME} PRIVATE ${PCAP_INCLUDE_DIR})
 target_link_libraries(${EXTENSION_NAME} PRIVATE ${PCAP_LIBRARY})
 
 target_include_directories(${LOADABLE_EXTENSION_NAME} PRIVATE ${PCAP_INCLUDE_DIR})
-target_link_libraries(${LOADABLE_EXTENSION_NAME} ${PCAP_LIBRARY})
+target_link_libraries(${LOADABLE_EXTENSION_NAME} PRIVATE ${PCAP_LIBRARY})
 
 # Link Android log library only when building for Android
 # if(ANDROID)
