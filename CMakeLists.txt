@@ -18,10 +18,10 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(PCAP REQUIRED libpcap)
 
 target_include_directories(${EXTENSION_NAME} PRIVATE ${PCAP_INCLUDE_DIRS})
-target_link_libraries(${EXTENSION_NAME} PRIVATE ${PCAP_LIBRARIES})
+target_link_libraries(${EXTENSION_NAME} ${PCAP_LIBRARIES})
 
 target_include_directories(${LOADABLE_EXTENSION_NAME} PRIVATE ${PCAP_INCLUDE_DIRS})
-target_link_libraries(${LOADABLE_EXTENSION_NAME} PRIVATE ${PCAP_LIBRARIES})
+target_link_libraries(${LOADABLE_EXTENSION_NAME} ${PCAP_LIBRARIES})
 
 # Link Android log library only when building for Android
 # if(ANDROID)
