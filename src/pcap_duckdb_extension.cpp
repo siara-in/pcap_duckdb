@@ -3,11 +3,8 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
 
 #include <netinet/ip.h>
 #include <netinet/ip6.h>
@@ -205,8 +202,6 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
     auto &bind = (PcapPacketsBindData &)*input.bind_data;
 
     if (input.filters) {
-        // Include "duckdb/planner/table_filter.hpp" for the full TableFilterSet definition.
-        // Access via the public 'filters' map (map<idx_t, unique_ptr<TableFilter>>).
         auto &filters_map = input.filters->filters;
         for (auto it = filters_map.begin(); it != filters_map.end(); ) {
             idx_t col_idx = it->first;
@@ -216,49 +211,49 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
             pf.column_index = col_idx;
             // printf("col_idx: %d, filter_type: %d,", col_idx, filter->filter_type);
 
-            // Unwrap any OptionalFilter wrapper — use Cast<> (DuckDB 1.3+),
-            // not static_cast, so the type-check throws on mismatch.
-            TableFilter *current_filter = filter.get();
+            TableFilter* current_filter = filter.get();
             while (current_filter->filter_type == TableFilterType::OPTIONAL_FILTER) {
-                current_filter = current_filter->Cast<OptionalFilter>().child_filter.get();
+                current_filter = static_cast<OptionalFilter &>(*current_filter).child_filter.get();
             }
 
-            // Handle each concrete filter type
+            // 2. PROCESS: Handle the core filter type
             if (current_filter->filter_type == TableFilterType::CONSTANT_COMPARISON) {
-                auto &cf = current_filter->Cast<ConstantFilter>();
-                pf.type  = cf.comparison_type;
-                pf.value = cf.constant;
+                auto &constant_filter = static_cast<ConstantFilter &>(*current_filter);
+                pf.type = constant_filter.comparison_type;
+                pf.value = constant_filter.constant;
                 bind.pushed_filters.push_back(std::move(pf));
-            }
+            } 
             else if (current_filter->filter_type == TableFilterType::CONJUNCTION_AND) {
-                auto &and_filter = current_filter->Cast<ConjunctionAndFilter>();
+                auto &and_filter = static_cast<ConjunctionAndFilter &>(*current_filter);
                 for (auto &child : and_filter.child_filters) {
+                    // Check if children of AND are constants
                     if (child->filter_type == TableFilterType::CONSTANT_COMPARISON) {
                         PcapFilter pf_and;
                         pf_and.column_index = col_idx;
-                        auto &cc = child->Cast<ConstantFilter>();
-                        pf_and.type  = cc.comparison_type;
-                        pf_and.value = cc.constant;
+                        auto &constant_child = static_cast<ConstantFilter &>(*child);
+                        pf_and.type = constant_child.comparison_type;
+                        pf_and.value = constant_child.constant;
                         bind.pushed_filters.push_back(std::move(pf_and));
                     }
-                    // Nested OPTIONALs/ORs inside AND are left for DuckDB to re-evaluate.
+                    // Note: If AND contains nested OPTIONALs or ORs, 
+                    // you might need a recursive call here.
                 }
             }
             else if (current_filter->filter_type == TableFilterType::CONJUNCTION_OR) {
-                auto &or_filter = current_filter->Cast<ConjunctionOrFilter>();
+                auto &or_filter = static_cast<ConjunctionOrFilter &>(*current_filter);
                 pf.type = ExpressionType::COMPARE_IN;
                 vector<Value> in_values;
                 for (auto &child : or_filter.child_filters) {
                     if (child->filter_type == TableFilterType::CONSTANT_COMPARISON) {
-                        in_values.push_back(child->Cast<ConstantFilter>().constant);
+                        in_values.push_back(static_cast<ConstantFilter &>(*child).constant);
                     }
                 }
                 pf.value = Value::LIST(LogicalType::ANY, in_values);
                 bind.pushed_filters.push_back(std::move(pf));
             }
             else if (current_filter->filter_type == TableFilterType::IN_FILTER) {
-                auto &in_filter = current_filter->Cast<InFilter>();
-                pf.type  = ExpressionType::COMPARE_IN;
+                auto &in_filter = static_cast<InFilter &>(*current_filter);
+                pf.type = ExpressionType::COMPARE_IN;
                 pf.value = Value::LIST(LogicalType::ANY, in_filter.values);
                 bind.pushed_filters.push_back(std::move(pf));
             }
@@ -271,7 +266,7 @@ PcapPacketsInit(ClientContext &, TableFunctionInitInput &input) {
                 bind.pushed_filters.push_back(std::move(pf));
             }
             else {
-                // Filter type not handled — leave it for DuckDB to evaluate
+                // Not a filter type we handle yet
                 ++it;
                 continue;
             }
