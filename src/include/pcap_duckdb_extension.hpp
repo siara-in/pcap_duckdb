@@ -4,7 +4,6 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/common/types.hpp"
 
-#include <pcap/pcap.h>
 #include <string>
 #include <vector>
 

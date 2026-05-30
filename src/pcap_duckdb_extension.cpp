@@ -13,6 +13,8 @@
 #include <net/ethernet.h>
 #include <arpa/inet.h>
 
+#include <pcap/pcap.h>
+
 #ifndef ETHERTYPE_IPV6
 #define ETHERTYPE_IPV6 0x86DD
 #endif
