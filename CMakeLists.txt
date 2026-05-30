@@ -17,12 +17,20 @@ if(PKG_CONFIG_FOUND)
 endif()
 
 if(PCAP_FOUND)
-  # pkg-config path (Linux CI with vcpkg)
   include_directories(${PCAP_INCLUDE_DIRS})
-  set(PCAP_LINK_LIBS ${PCAP_STATIC_LIBRARIES})
+  # Construct full path to static lib instead of relying on PCAP_STATIC_LIBRARIES
+  find_library(PCAP_STATIC_LIB
+    NAMES libpcap.a pcap
+    HINTS ${PCAP_LIBRARY_DIRS}
+    NO_DEFAULT_PATH
+  )
+  if(NOT PCAP_STATIC_LIB)
+    message(FATAL_ERROR "Could not find libpcap.a in ${PCAP_LIBRARY_DIRS}")
+  endif()
+  message(STATUS "PCAP_STATIC_LIB resolved to: ${PCAP_STATIC_LIB}")
+  set(PCAP_LINK_LIBS ${PCAP_STATIC_LIB})
   set(PCAP_LINK_DIRS ${PCAP_LIBRARY_DIRS})
 else()
-  # Fallback: direct search (macOS with homebrew/system, Windows)
   find_path(PCAP_INCLUDE_DIR pcap/pcap.h REQUIRED)
   find_library(PCAP_LIBRARY pcap REQUIRED)
   include_directories(${PCAP_INCLUDE_DIR})
