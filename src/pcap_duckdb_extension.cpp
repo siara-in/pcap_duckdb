@@ -425,17 +425,13 @@ std::string PcapDuckdbExtension::Version() const {
 } // namespace duckdb
 
 extern "C" {
-DUCKDB_EXTENSION_API void pcap_duckdb_init(duckdb::DatabaseInstance &db) {
-    static duckdb::PcapDuckdbExtension ext;
-    duckdb::ExtensionLoader loader(db, ext.Name());
-    ext.Load(loader);
+
+DUCKDB_CPP_EXTENSION_ENTRY(pcap_duckdb, loader) {
+    duckdb::LoadInternal(loader);
 }
-DUCKDB_EXTENSION_API void pcap_duckdb_duckdb_cpp_init(duckdb::DatabaseInstance &db) {
-    static duckdb::PcapDuckdbExtension ext;
-    duckdb::ExtensionLoader loader(db, ext.Name());
-    ext.Load(loader);
-}
+
 DUCKDB_EXTENSION_API const char *pcap_duckdb_version() {
     return pcap_duckdb_ver;
 }
+
 }
